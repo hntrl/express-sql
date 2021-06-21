@@ -1,8 +1,8 @@
 {
   "name": "express-sql",
-  "version": "1.0.0",
+  "version": "0.1.1-alpha.0",
   "description": "Easy SQL object management with express",
-  "main": "index.js",
+  "main": "./src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -10,10 +10,16 @@
     "type": "git",
     "url": "git+https://github.com/hntrl/express-sql.git"
   },
+  "files": [
+    "src/*"
+  ],
   "author": "",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/hntrl/express-sql/issues"
   },
-  "homepage": "https://github.com/hntrl/express-sql#readme"
+  "dependencies": {
+    "express": "^4.17.1",
+    "mysql2": "^2.2.5"
+  }
 }

@@ -1,11 +1,6 @@
 
 const errors = require('./errors');
-
-const bindings = [
-    [String, "VARCHAR"],
-    [Number, "INT"],
-    [Boolean, "BOOL"]
-];
+const { _Type } = require('./types');
 
 class Schema {
 
@@ -37,7 +32,7 @@ class Schema {
         });
     }
 
-    validate(object) {
+    validate(object, allowMissing) {
 
         var objectKeys = Object.keys(object);
         var thisKeys = Object.keys(this.object);
@@ -47,7 +42,7 @@ class Schema {
         // fails: this[1, 2, 3] object[1, 2, 3, 4]
         var extraneous = objectKeys.filter(key => !thisKeys.includes(key));
         if (extraneous.length) {
-            throw new errors.ValidationError(`Keys ${extraneous.join()} are not permitted`);
+            throw new errors.ValidationError(`Keys ${extraneous.join()} are not permitted`, extraneous);
         }
 
         // fails: this[1, 2, 3] object[1, 2, 3(NULL)]
@@ -55,14 +50,16 @@ class Schema {
         var nullKeys = Object.entries(object).map(entry => entry[1] === null ? entry[0] : false).filter(a => a);
         var problemNullKeys = nullKeys.filter(a => !thisNullableKeys.includes(a));
         if (problemNullKeys.length) {
-            throw new errors.ValidationError(`Keys ${problemNullKeys.join()} cannot be null`)
+            throw new errors.ValidationError(`Keys ${problemNullKeys.join()} cannot be null`, problemNullKeys)
         }
 
-        // fails: this[1, 2, 3] object[1, 2]
-        // passes: this[1, 2, 3(NULL)] object[1, 2]
-        var missing = thisRequiredKeys.filter(key => !objectKeys.includes(key));
-        if (missing.length) {
-            throw new errors.ValidationError(`Missing keys ${missing.join()}`);
+        if (!allowMissing) {
+            // fails: this[1, 2, 3] object[1, 2]
+            // passes: this[1, 2, 3(NULL)] object[1, 2]
+            var missing = thisRequiredKeys.filter(key => !objectKeys.includes(key));
+            if (missing.length) {
+                throw new errors.ValidationError(`Missing keys ${missing.join()}`, missing);
+            }
         }
 
         var problems = Object.entries(object).map(entry => {
@@ -72,7 +69,7 @@ class Schema {
         }).filter(a => a);
 
         if (problems.length) {
-            throw new errors.ValidationError(`Keys ${problems.join()} failed validation`);
+            throw new errors.ValidationError(`Keys ${problems.join()} failed validation`, problems);
         }
 
         return true;
@@ -80,73 +77,58 @@ class Schema {
 
     validateKey(key, val) {
         if (!this.object[key][1].check(val)) {
-            throw new errors.ValidationError(`Keys ${key} failed validation`)
+            throw new errors.ValidationError(`Keys ${key} failed validation`, [key])
         }
         return true;
     }
     key(key) {
         return this.object[key][1];
     }
-}
 
-class _Type {
-
-    static from(type) {
-        if (type instanceof _Type) {
-            return type;
-        } else {
-            var obj = new _Type();
-            obj.literal = type;
-            return obj;
+    // TODO: these could maybe be reduced?
+    convertToObject(sql) {
+        let thisObjectEntries = Object.entries(this.object);
+        let convertedSQL = Object.entries(sql).map(field => {
+            let objectRef = thisObjectEntries.find(entry => entry[1][0] == field[0]);
+            if (!objectRef) {
+                throw new errors.ValidationError(`Unknown key ${field[0]}`);
+            }
+            return [objectRef[0], field[1]];
+        });
+        return Object.fromEntries(convertedSQL);
+    }
+    convertToSQL(obj) {
+        let thisObjectEntries = Object.entries(this.object);
+        let convertedObject = Object.entries(obj).map(field => {
+            let objectRef = thisObjectEntries.find(entry => entry[0] == field[0]);
+            if (!objectRef) {
+                throw new errors.ValidationError(`Unknown key ${field[0]}`);
+            }
+            return [objectRef[1][0], field[1]]
+        });
+        return Object.fromEntries(convertedObject);
+    }
+    
+    valueLists(data) {
+        let entries = Object.entries(this.convertToSQL(data));
+        return {
+            col: entries.map(item => `\`${item[0]}\``).join(),
+            val: entries.map(item => typeof item[1] == 'string' ? `"${item[1]}"` : item[1]).join()
         }
     }
-
-    static isSupported(type) {
-        let supported = bindings.map(bind => bind[0]);
-
-        if (type instanceof _Type) {
-            return true;
-        } else if (supported.find(item => item === type)) {
-            return true;
-        }
-        return false;
+    columnList() {
+        return Object.values(this.object).map(item => `\`${item[0]}\``).join();
     }
-
-    // TODO: find a way to compare object literals rather then using constructor names
-    check(value) {
-        if ((value === null || value === undefined) && this.isNullable) return true;
-        if (this.length && (String(value).length !== this.length)) return false;
-        if (Array.isArray(this.allowed)) {
-            return this.allowed.includes(value);
-        } else {
-            return value.constructor.name === this.literal.name;
-        }
+    valueList(data) {
+        return Object.values(data).map(item => typeof item == 'string' ? `"${item}"` : item).join();
+    }
+    separatedList(data) {
+        return Object.entries(this.convertToSQL(data)).map(entry => {
+            let [key, val] = entry;
+            let stringValue = typeof val == 'string' ? `"${val}"` : val;
+            return `\`${key}\`=${stringValue}`;
+        }).join();
     }
 }
 
-let Fixed = function(type, length) {
-    type = _Type.from(type);
-    type.length = length;
-    return type;
-}.bind(_Type);
-
-// TODO: Should multiple types be accepted for enum?
-let Enum = function(...options) {
-    var type = new _Type();
-    type.literal = typeof options[0];
-    type.allowed = options;
-    return type;
-}.bind(_Type);
-
-let Null = function(type) {
-    type = _Type.from(type);
-    type.isNullable = true;
-    return type;
-}.bind(_Type);
-
-module.exports = {
-    Schema,
-    Fixed,
-    Enum,
-    Null
-}
+module.exports = { Schema }
