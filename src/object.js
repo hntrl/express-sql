@@ -32,60 +32,27 @@ class SQLObject {
             throw new errors.ConfigError('Primary key cannot be null')
         }
 
+        this.paths = options.path;
+
         this._primaryKey = options.primaryKey;
         this._sqlKey = this._schema.object[this._primaryKey][0]
         this._pathAlias = options.pathAlias || this._primaryKey;
 
-        if (options.paths) {
-            if (options.paths instanceof Function) this.paths = options.paths(this.methods);
-            else this.paths = options.paths;
-        } else {
-            this.paths = defaultPathBuilder(this.methods);
-        }
-    }
-
-    sqlPrimaryKey(params) {
-        return `${this._sqlKey}=${params[this._primaryKey]}`;
-    } 
-
-    _middleware(func) {
-        return (req, res, conn) => {
-            req.body = req.body || {};
-            var pathVal = req.params[this._pathAlias];
-            if (pathVal) {
-                if (this._schema.object[this._primaryKey][1].is(Number)) {
-                    pathVal = parseInt(pathVal);
-                }
-                req.body[this._primaryKey] = pathVal;
-            }
-            try {
-                return func(req.body, res, conn);
-            } catch (e) {
-                if (e instanceof errors.ValidationError) {
-                    res.status(400);
-                    res.send({ error: 'ValidationError', msg: e.msg, keys: e.keys })
-                } else {
-                    res.send(500);
-                    throw e;
-                }
-            }
-        }
-    }
-
-    get methods() {
-        return {
-            post: this._middleware((params, res, conn) => {
-                params[this._primaryKey] = params[this._primaryKey] || this._makeID();
-                this._schema.validate(params);
-                let lists = this._schema.valueLists(params);
+        // TODO: this shouldnt be here
+        // TODO: The current method lifecycle doesn't work well with query params
+        this.methods = {
+            post: this._middleware(({ body }, res, conn) => {
+                body[this._primaryKey] = body[this._primaryKey] || this._makeID();
+                this._schema.validate(body);
+                let lists = this._schema.valueLists(body);
                 let queryString = `INSERT INTO ${this._tableName} (${lists.col}) VALUES (${lists.val});`
                 return conn.query(queryString, res).then(() => {
-                    res.send(params);
+                    res.send(body);
                 });
             }),
-            get: this._middleware((params, res, conn) => {
-                this._schema.validateKey(this._primaryKey, params[this._primaryKey]);
-                let queryString = `SELECT * FROM ${this._tableName} WHERE ${this.sqlPrimaryKey(params)} LIMIT 1;`;
+            get: this._middleware(({ body }, res, conn) => {
+                this._schema.validateKey(this._primaryKey, body[this._primaryKey]);
+                let queryString = `SELECT * FROM ${this._tableName} WHERE ${this.sqlPrimaryKey(body)} LIMIT 1;`;
                 return conn.query(queryString, res).then(data => {
                     if (data[0].length) {
                         res.send(this._schema.convertToObject(data[0][0]))
@@ -95,22 +62,22 @@ class SQLObject {
                     }
                 })
             }),
-            put: this._middleware((params, res, conn) => {
-                this._schema.validate(params, true)
-                let queryString = `UPDATE ${this._tableName} SET ${this._schema.separatedList(params)} WHERE ${this.sqlPrimaryKey(params)};`
+            put: this._middleware(({ body }, res, conn) => {
+                this._schema.validate(body, true)
+                let queryString = `UPDATE ${this._tableName} SET ${this._schema.separatedList(body)} WHERE ${this.sqlPrimaryKey(body)};`
                 return conn.query(queryString, res).then(data => {
                     if (data[0].affectedRows === 0) {
                         res.status(404);
                         res.send({})
                     } else {
-                        res.send(params);
+                        res.send(body);
                     }
                 });
             }),
-            delete: this._middleware((params, res, conn) => {
+            delete: this._middleware(({ body }, res, conn) => {
                 console.log('delete');
-                this._schema.validateKey(this._primaryKey, params[this._primaryKey]);
-                let queryString = `DELETE FROM ${this._tableName} WHERE ${this.sqlPrimaryKey(params)}`;
+                this._schema.validateKey(this._primaryKey, body[this._primaryKey]);
+                let queryString = `DELETE FROM ${this._tableName} WHERE ${this.sqlPrimaryKey(body)}`;
                 return conn.query(queryString, res).then(data => {
                     if (data[0].affectedRows === 0) {
                         res.status(404);
@@ -122,6 +89,53 @@ class SQLObject {
                 });
             }),
         }
+    }
+
+    _buildPaths() {
+        if (this.paths) {
+            if (this.paths instanceof Function) this.paths = this.paths(this.methods);
+            else this.paths = this.paths;
+        } else {
+            this.paths = defaultPathBuilder(this.methods);
+        }
+    }
+
+    sqlPrimaryKey(params) {
+        return `${this._sqlKey}=${params[this._primaryKey]}`;
+    } 
+
+    _middleware(func) {
+        return (req, res, conn) => {
+            let params = {
+                body: req.body || {},
+                path: req.params,
+                query: req.query
+            }
+
+            let pathVal = params.path[this._pathAlias];
+            if (pathVal) {
+                if (this._schema.object[this._primaryKey][1].is(Number)) {
+                    pathVal = parseInt(pathVal);
+                }
+                params.body[this._primaryKey] = pathVal;
+            }
+
+            try {
+                return func(params, res, conn);
+            } catch (e) {
+                if (e instanceof errors.ValidationError) {
+                    res.status(400);
+                    res.send({ error: 'ValidationError', msg: e.msg, keys: e.keys })
+                } else {
+                    res.status(500);
+                    throw e;
+                }
+            }
+        }
+    }
+
+    defineMethod(key, func) {
+        this.methods[key] = this._middleware(func)
     }
 }
 

@@ -42,6 +42,7 @@ class Connection {
                 }
             }
         }
+        object._buildPaths();
         map(object.paths, '/');
         return router;
     }
