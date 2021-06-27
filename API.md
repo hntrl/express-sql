@@ -7,9 +7,10 @@
 + eSQL (Express-SQL)
     + Class: `eSQL.Object`
         + `new eSQL.Object(options)`
+        + `object.use()`
     + Class: `eSQL.Connection`
-        + `new eSQL.Connection(options)`
-        + `connection.link(Object)`
+        + `eSQL.Connection(options)`
+        + `connection.query(queryString)`
     + Class: `eSQL.Schema`
         + `new eSQL.Schema(object)`
         + Type: `eSQL.Fixed`
@@ -35,20 +36,23 @@
 
 Constructs the default class used in constructing routes and SQL queries
 
+#### `object.use()`
+
++ Returns {Express.Router} The router used to handle object requests
+
 ### Class: `eSQL.Connection`
 
-#### `new eSQL.Connection(options)`
+#### `eSQL.Connection(options)`
 
 + `options` {Object}
++ Returns: {Express.Router} The router returned will make all express requests access this object using `req.conn`
 
 The Connection object is required to make any query to a remote server. This wraps around the default connection object used in the [mysql](https://github.com/mysqljs/mysql#todo) library, so you can find options for it there.
 
-#### `connection.link(Object)`
+#### `connection.query(query)`
 
-+ `Object` {eSQL.Object} The object to be implemented into express
-+ Returns: {Express.Router}
-
-Used to create the router for an object to be implemented into express in the default CRUD style. It's worth noting that the router object that's returned does not reflect changes made to the eSQL object after the fact. It will need to be relinked.
++ `query` {String} The query string to be sent out
++ Returns {Object[]} The response from the remote server
 
 ### Class: `eSQL.Schema`
 

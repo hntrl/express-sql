@@ -137,6 +137,29 @@ class SQLObject {
     defineMethod(key, func) {
         this.methods[key] = this._middleware(func)
     }
+
+    use() {
+        let router = express.Router();
+        let map = (a, route) => {
+            for (var key in a) {
+                route = route.replace('(alias)', `:${this._pathAlias}`);
+                switch (typeof a[key]) {
+                    // { '/path': { ... }}
+                    case 'object':
+                        map(a[key], route + key);
+                        break;
+                    // get: function(){ ... }
+                    case 'function':
+                        let func = a[key];
+                        router[key](route, (rq, rs) => func(rq, rs, this))
+                        break;
+                }
+            }
+        }
+        this._buildPaths();
+        map(this.paths, '/');
+        return router;
+    }
 }
 
 module.exports = { Object: SQLObject }

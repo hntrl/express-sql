@@ -19,11 +19,13 @@ const eSQL = require("express-sql");
 
 const app = express();
 
-let conn = new eSQL.Connection({
-    host: "localhost:3306",
-    username: "timmy",
-    password: "letmein"
-});
+app.use(
+    eSQL.Connection({
+        host: "localhost:3306",
+        username: "timmy",
+        password: "letmein"
+    })
+)
 
 let Person = new eSQL.Object({
     primaryKey: "ID",
@@ -34,7 +36,7 @@ let Person = new eSQL.Object({
     }
 })
 
-app.use("/people", conn.link(Person));
+app.use("/people", Person.use());
 
 app.listen(3000);
 ```
