@@ -1,5 +1,5 @@
 
-const mysql = require('mysql2');
+const mysql = require('mysql2/promise');
 
 module.exports = function(options) {
     
@@ -7,15 +7,8 @@ module.exports = function(options) {
     this.sql = mysql.createConnection(opts);
 
     this.query = async function query(queryString) {
-        return new Promise((pass, fail) => 
-            this.sql.query(queryString, function(err, results) {
-                if (err) {
-                    res.status(500).send({ msg: 'A SQL error occured' });
-                    fail(err);
-                }
-                pass(results);
-            })
-        )
+        let sql = await this.sql;
+        return (await sql.execute(queryString))[0];
     }
 
     return (req, _, next) => {
