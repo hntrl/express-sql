@@ -1,6 +1,6 @@
 {
   "name": "express-sql",
-  "version": "0.2.0-alpha.1",
+  "version": "0.2.0-alpha.2",
   "description": "Easy SQL object management with express",
   "main": "./src/index.js",
   "scripts": {
