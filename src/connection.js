@@ -2,25 +2,21 @@
 const mysql = require('mysql2/promise');
 
 module.exports = function(options) {
-    
+
     let opts = options || {};
+    let keepAliveTimeout = opts.keepAlive;
+    delete opts.keepAlive;
+
     this.sql = mysql.createConnection(opts);
 
-    this.query = async function query(queryString, _retry = 1) {
+    this.query = async function query(queryString) {
         let sql = await this.sql;
-        return sql.ping()
-          .then(async () => {
-            let [results, fields] = await sql.execute(queryString);
-            return results;
-          })
-          .catch(() => {
-            if (_retry > 3) {
-              this.sql = mysql.createConnection(opts);
-              this.query(queryString, _retry + 1)
-            } else {
-              throw new Error('MYSQL failed to reconnect');
-            }
-          })
+        return (await sql.execute(queryString))[0];
+    }
+
+    if (keepAliveTimeout) {
+      let keepAlive = () => this.query('SELECT 1');
+      setInterval(keepAlive, keepAliveTimeout)
     }
 
     return (req, _, next) => {
