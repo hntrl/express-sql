@@ -1,7 +1,7 @@
 
-### `🚨 This package is in early development. Things might not work as intended or might not be documented properly.`
+### `🚨 This project is archived!`
 
-If you stumble upon a problem or a potential improvement, please open an issue or PR!
+In retrospect, incorporating this layer is better suited as a utility function rather than a framework.
 
 ## Express-SQL (eSQL)
 
